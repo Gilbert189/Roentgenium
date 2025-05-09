@@ -1,0 +1,6 @@
+{
+    "flake8.args": [
+        "--ignore=E401,E701,E226,ANN101,ANN001,ANN002,ANN003,ANN201,ANN202,ANN204,W503",
+        "--max-line-length=160"
+    ]
+}

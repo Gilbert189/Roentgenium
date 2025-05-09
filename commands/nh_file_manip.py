@@ -1,29 +1,38 @@
 import versions
 from . import framework as fw
-import shutil, os, datetime, math, random
+import shutil, os, datetime, math
 
 version = versions.Version(1, 9, 0)
 nihonium_minver = versions.Version(0, 10, 3)
 alt_minvers = {}
 
-# codes:
-# 0 | valid
-# 1 | contains ".."
-# 2 | is bad device name
-# 3 | contains invalid character ( < > : " \ | ? *)
-def sanitizeFilename(fn):
-    if "../" in fn: return [False,1]
-    elif fn == "con": return [False,2]
-    elif fn == "com": return [False,2]
-    elif fn == "prn": return [False,2]
-    elif any(x in fn for x in ('<', '>', ':', '"', '\\', '|', '?', '*')): return [False,3] # https://stackoverflow.com/a/21406748
-    else: return [True,0]
 
-#from Nihonium
-def logEntry(entry: str, timestamp=None): # Used to add entries to the log files.
+def sanitize_filename(fn):
+    # codes:
+    # 0 | valid
+    # 1 | contains ".."
+    # 2 | is bad device name
+    # 3 | contains invalid character ( < > : " \ | ? *)
+    if "../" in fn: return [False, 1]
+    elif fn == "con": return [False, 2]
+    elif fn == "com": return [False, 2]
+    elif fn == "prn": return [False, 2]
+    elif any(x in fn for x in ('<', '>', ':', '"', '\\', '|', '?', '*')): return [False, 3]  # https://stackoverflow.com/a/21406748
+    else: return [True, 0]
+
+
+sanitizeFilename = sanitize_filename
+
+
+# from Nihonium
+def log_entry(entry: str, timestamp=None):  # Used to add entries to the log files.
     if timestamp is None: timestamp = datetime.datetime.now()
     with open("logs/" + timestamp.strftime("%Y%m%d") + ".log", "a", encoding="utf-8") as logfile:
         logfile.write("[" + timestamp.strftime("%I:%M:%S.%f %p") + "] " + entry + "\n")
+
+
+logEntry = log_entry
+
 
 def text(bot_data, thread_data, user_data, command="read", filename="_", *other):
     # commands:
@@ -38,13 +47,17 @@ def text(bot_data, thread_data, user_data, command="read", filename="_", *other)
     # create     | create a file, fails if it exists
     # duplicate  | duplicate a file, fails if it does not exist
     # delete     | delete a file, fails if it does not exist
-    # _.txt is unique in that append and insert behave like write, copy and cut select everything, paste overwrites everything, and create, duplicate, and delete all fail
+    # _.txt is unique in that append and insert behave like write, copy and cut select everything, paste overwrites everything...
+    # ...and create, duplicate, and delete all fail
     if filename == "_":
         if command == "append": command = "write"
         if command == "insert": command = "write"
-    sani = sanitizeFilename(filename)
+    sani = sanitize_filename(filename)
     if sani[0]: pass
-    else: return "It seems like somethings wrong with that filename.[code]" + ["Wait, no, this is a bug.", "Cannot go up a folder.", "Invalid device name.", "Contains a forbidden character."][sani[1]] + "[/code]"
+    else:
+        return "It seems like somethings wrong with that filename.[code]" + [
+            "Wait, no, this is a bug.", "Cannot go up a folder.", "Invalid device name.", "Contains a forbidden character."
+        ][sani[1]] + "[/code]"
     if command == "read":
         try:
             with open("files/" + filename + ".txt", "r", encoding="utf-8") as file:
@@ -110,6 +123,7 @@ def text(bot_data, thread_data, user_data, command="read", filename="_", *other)
             except IOError: return "No file by the name [i]" + filename + ".txt[/i] exists."
     else: return "Invalid command: " + command
 
+
 def files(bot_data, thread_data, user_data, command="read", filename="_.txt", *other):
     # commands:
     # read      | read the hex data of a file
@@ -122,9 +136,13 @@ def files(bot_data, thread_data, user_data, command="read", filename="_.txt", *o
     # create    | create a file, fails if it exists
     # duplicate | duplicate a file, fails if it does not exist
     # delete    | delete a file, fails if it does not exist
-    sani = sanitizeFilename(filename)
+    sani = sanitize_filename(filename)
     if sani[0]: pass
-    else: return "It seems like somethings wrong with that filename.[code]" + ["Wait, no, this is a bug.", "Cannot go up a folder.", "Invalid device name.", "Contains a forbidden character."][sani[1]] + "[/code]"
+    else:
+        # FIXME: Apply DRY here: this isn't sufficient
+        return "It seems like somethings wrong with that filename.[code]" + [
+            "Wait, no, this is a bug.", "Cannot go up a folder.", "Invalid device name.", "Contains a forbidden character."
+        ][sani[1]] + "[/code]"
     if command == "read":
         try:
             with open("files/" + filename, "rb") as file:
@@ -135,28 +153,28 @@ def files(bot_data, thread_data, user_data, command="read", filename="_.txt", *o
                 for i in range(0, len(filehex), 2):
                     filehexlist.append(filehex[i:i+2])
                 d = "         x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF\n        ------------------------------------------------\n"
-                for j in range(math.ceil(len(filehexlist)/16)):
+                for j in range(math.ceil(len(filehexlist) / 16)):
                     d += "0x" + hex(j)[2:].rjust(3, "0") + "x |"
                     e = ""
-                    for k in filehexlist[j*16:(j*16)+16]:
+                    for k in filehexlist[j * 16:(j * 16) + 16]:
                         e += " " + k
                     d += e.ljust(48)
                     d += " | "
-                    for l in filehexlist[j*16:(j*16)+16]:
-                        if l == "0a": # newline
+                    for byte in filehexlist[j * 16:(j * 16) + 16]:
+                        if byte == "0a":  # newline
                             d += "↕"
-                        elif l == "09": # tab
+                        elif byte == "09":  # tab
                             d += "↔"
-                        elif l == "00": # null
+                        elif byte == "00":  # null
                             d += "Φ"
-                        elif int(l, 16) > 126: # outside ascii
+                        elif int(byte, 16) > 126:  # outside ascii
                             d += "·"
-                        elif int(l, 16) < 32: # before printable
+                        elif int(byte, 16) < 32:  # before printable
                             d += "•"
-                        elif l == "20": # space
+                        elif byte == "20":  # space
                             d += "˽"
-                        else: # other
-                            m = bytes.fromhex(l)
+                        else:  # other
+                            m = bytes.fromhex(byte)
                             d += m.decode("ASCII")
                     d += "\n"
                 d = d[0:-1]
@@ -165,9 +183,12 @@ def files(bot_data, thread_data, user_data, command="read", filename="_.txt", *o
                 return output
         except IOError: return "No file by the name [i]" + filename + "[/i] exists."
     elif command == "rename":
-        sani = sanitizeFilename(other[0])
+        sani = sanitize_filename(other[0])
         if sani[0]: pass
-        else: return "It seems like somethings wrong with that filename.[code]" + ["Wait, no, this is a bug.", "Cannot go up a folder.", "Invalid device name."][sani[1]] + "[/code]"
+        else:
+            return "It seems like somethings wrong with that filename.[code]" + [
+                "Wait, no, this is a bug.", "Cannot go up a folder.", "Invalid device name.", "Contains a forbidden character."
+            ][sani[1]] + "[/code]"
         try:
             os.rename("files/" + filename, "files/" + other[0])
             logEntry("Renamed file '" + filename + "' to '" + other[0] + "'")
@@ -204,16 +225,20 @@ def files(bot_data, thread_data, user_data, command="read", filename="_.txt", *o
             except IOError: return "No file by the name [i]" + filename + "[/i] exists."
     else: return "Invalid command: " + command
 
-textCommand = fw.Command("text", text, [fw.CommandInput("command", "str", "read", "The subcommand to use."),
-                                        fw.CommandInput("filename", "str", "_", "The file to use."),
-                                        fw.CommandInput("other", "varies", "", "Varies by subcommand.")], helpShort="Text file modificaton.",
-                                        helpLong="A set of subcommands for manipulating text files.\n(You can see the list of subcommands on Nihonium's website.)")
-fileCommand = fw.Command("files", files, [fw.CommandInput("command", "str", "read", "The subcommand to use."),
-                                        fw.CommandInput("filename", "str", "_", "The file to use."),
-                                        fw.CommandInput("other", "varies", "", "Varies by subcommand.")], helpShort="File modificaton.",
-                                        helpLong="A set of subcommands for manipulating files.\n(You can see the list of subcommands on Nihonium's website.)")
 
-commandlist = {"text": textCommand, "files": fileCommand, "file": fileCommand}
+text_command = fw.Command("text", text, [fw.CommandInput("command", "str", "read", "The subcommand to use."),
+                                         fw.CommandInput("filename", "str", "_", "The file to use."),
+                                         fw.CommandInput("other", "varies", "", "Varies by subcommand.")],
+                          helpShort="Text file modificaton.",
+                          helpLong="A set of subcommands for manipulating text files.\n(You can see the list of subcommands on Nihonium's website.)")
+file_command = fw.Command("files", files, [fw.CommandInput("command", "str", "read", "The subcommand to use."),
+                                           fw.CommandInput("filename", "str", "_", "The file to use."),
+                                           fw.CommandInput("other", "varies", "", "Varies by subcommand.")],
+                          helpShort="File modificaton.",
+                          helpLong="A set of subcommands for manipulating files.\n(You can see the list of subcommands on Nihonium's website.)")
+
+
+commandlist = {"text": text_command, "files": file_command, "file": file_command}
 ex_commandlist = {}
 do_last = []
 do_first = []

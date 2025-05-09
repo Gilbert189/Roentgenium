@@ -26,8 +26,8 @@ for j in _submodules:
         except KeyError:
             ex_commands[k] = {}
             ex_commands[k].update(j.ex_commandlist[k])
-    for l in j.alt_minvers:
-        try: alt_minvers[l] = j.alt_minvers[l]
+    for k in j.alt_minvers:
+        try: alt_minvers[k] = j.alt_minvers[k]
         except KeyError:
-            alt_minvers[l] = {}
-            alt_minvers[l] = j.alt_minvers[l]
+            alt_minvers[k] = {}
+            alt_minvers[k] = j.alt_minvers[k]

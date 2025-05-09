@@ -9,24 +9,27 @@ alt_minvers = {}
 did_roll = False
 
 with open("botInfo.json", "r", encoding="utf-8") as infofile:
-    bot_info = json.loads(infofile.read()) # Info about the bot.
+    bot_info = json.loads(infofile.read())  # Info about the bot.
 
 pc_len = datetime.timedelta(seconds=bot_info["cycleDelay"])
 
-def rollADice(bot_data, thread_data, user_data, action="roll"):
+
+def roll_a_dice(bot_data, thread_data, user_data, action="roll"):
     global did_roll
     with open("user_data.json", "r+", encoding="utf-8") as rollfile:
         roll_data = json.loads(rollfile.read())
     output = ""
     uID = str(user_data["uID"])
-    if uID not in roll_data: roll_data[uID] = {"rd_points": 0, "rd_timer": 0, "rd_limit": 0} # will be changed later
+    if uID not in roll_data: roll_data[uID] = {"rd_points": 0, "rd_timer": 0, "rd_limit": 0}  # will be changed later
     fw.logEntry(str(roll_data[uID]))
     if (action == "roll") and (roll_data[uID]["rd_limit"] < 5):
         roll_data2 = {**roll_data}
         del roll_data2["roll_last"]
         timenow = datetime.datetime.now(tz=datetime.timezone.utc)
         if roll_data[uID]["rd_timer"] > timenow.timestamp():
-            output = "You can't roll right now, you can roll again in about " + str(math.ceil((roll_data[uID]["rd_timer"] - timenow.timestamp())/60)) + " minutes."
+            output = (
+                "You can't roll right now, you can roll again in about " + str(math.ceil((roll_data[uID]["rd_timer"] - timenow.timestamp())/60)) + " minutes."
+            )
             roll_data[uID]["rd_limit"] += 1
             fw.logEntry(str(roll_data[uID]))
             fw.logEntry("a")
@@ -42,6 +45,7 @@ def rollADice(bot_data, thread_data, user_data, action="roll"):
                 done = True
                 result = random.randint(1, 10)
                 output += "You rolled a " + str(result)
+                # FIXME: Make this use f-strings
                 if result == 1:
                     roll_data[uID]["rd_points"] += 1
                     output += ", and gained one point."
@@ -63,7 +67,9 @@ def rollADice(bot_data, thread_data, user_data, action="roll"):
                     target = random.choice(list(roll_data2.keys()))
                     roll_data[target]["rd_points"] -= hold
                     roll_data[uID]["rd_points"] += hold
-                    output += ", causing someone random to lose " + str(hold) + " point" + ("s" if hold != 1 else "") + ", and for you to recieve said lost points."
+                    output += (
+                        ", causing someone random to lose " + str(hold) + " point" + ("s" if hold != 1 else "") + ", and for you to recieve said lost points."
+                    )
                 elif result == 6:
                     roll_data[uID]["rd_points"] -= 1
                     output += ", and lost one point."
@@ -85,7 +91,7 @@ def rollADice(bot_data, thread_data, user_data, action="roll"):
                     roll_data[uID]["rd_points"] += 10
                     roll_data[uID]["rd_timer"] = int((timenow + (pc_len*20)).timestamp())
                     output += ", and gained ten points! You can't roll for the next twenty parse-cycles, though."
-            output += "\nYou now have " + str(roll_data[uID]["rd_points"])+ " point" + ("s" if roll_data[uID]["rd_points"] != 1 else "") + "."
+            output += "\nYou now have " + str(roll_data[uID]["rd_points"]) + " point" + ("s" if roll_data[uID]["rd_points"] != 1 else "") + "."
             roll_data[uID]["rd_limit"] += 1
             fw.logEntry("d")
             if (roll_data[uID]["rd_limit"] == 5):
@@ -103,13 +109,17 @@ def rollADice(bot_data, thread_data, user_data, action="roll"):
         output += "Current leaderboard:\n[code]"
         roll_data2 = {**roll_data}
         del roll_data2["roll_last"]
-        #based off of careerkarma.com/blog/python-sort-a-dictionary-by-value/
+        # based off of careerkarma.com/blog/python-sort-a-dictionary-by-value/
         for i in sorted(roll_data2, key=lambda x: roll_data[x]["rd_points"]):
             output += str(i).rjust(4) + ": " + str(roll_data2[i]["rd_points"]) + " point" + ("s" if roll_data2[i]["rd_points"] != 1 else "") + "\n"
         output += "[/code][i](Note: the leaderboard uses user IDs rather than usernames, as that is all that is stored.)[/i]"
     return output
 
-def updateRollLast():
+
+rollADice = roll_a_dice
+
+
+def update_roll_last():
     global did_roll
     if did_roll:
         with open("user_data.json", "r+", encoding="utf-8") as rollfile:
@@ -119,11 +129,19 @@ def updateRollLast():
         with open("user_data.json", "w", encoding="utf-8") as rollfile:
             rollfile.write(json.dumps(roll_data, indent=4))
 
-def resetDidRoll():
+
+updateRollLast = update_roll_last
+
+
+def reset_did_roll():
     global did_roll
     did_roll = False
 
-def emptyLimits():
+
+resetDidRoll = reset_did_roll
+
+
+def empty_limits():
     with open("user_data.json", "r+", encoding="utf-8") as rollfile:
         roll_data = json.loads(rollfile.read())
     roll_data2 = {**roll_data}
@@ -133,7 +151,13 @@ def emptyLimits():
     with open("user_data.json", "w", encoding="utf-8") as rollfile:
         rollfile.write(json.dumps(roll_data, indent=4))
 
-diceCommand = fw.Command("rolladice", rollADice, [fw.CommandInput("action", "str", "roll", "What action you want to perform.")], helpShort="Roll a dice and see what happens.")
+
+emptyLimits = empty_limits
+
+
+diceCommand = fw.Command("rolladice", rollADice, [fw.CommandInput("action", "str", "roll", "What action you want to perform.")],
+                         helpShort="Roll a dice and see what happens.")
+
 
 commandlist = {"rolladice": diceCommand, "rolldice": diceCommand}
 ex_commandlist = {}
