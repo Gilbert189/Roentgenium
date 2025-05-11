@@ -1,0 +1,65 @@
+# This is the configuration file for Roentgenium.
+# Unless stated, the default values should be good enough.
+
+
+[bot]
+name = "Roentgenium"
+# The name of the bot. This doesn't need to be the same as the account name.
+
+id = "rontgen"
+# The internal ID of the bot. 
+# This is used for selecting supported commands.
+
+all_topics = false
+# If true, Roentgenium will respond to pings no matter what topic it is posted at.
+
+ignore_list = [
+    "Rontgen"
+]
+# A list of usernames that Roentgenium will ignore. This could be a bot or someone you really hate.
+
+
+[bot.periods]
+# How many seconds waiting...
+process_loop = 60
+# ...to parse and process alerts.
+
+publish_loop = 60
+# ...to post messages in the outbox.
+
+no_publish_loop = 1
+# ...to wait for messages in the outbox when it is empty.
+
+
+[bot.strings]
+tagline = "A bot for the TBGs, round 2."
+# The bot's tagline, displayed in its signature.
+
+offline = "Currently offline."
+# The message in the bot's signature that's displayed when it's offline. 
+
+online = "Currently online. ([i]not guaranteed[/i])"
+# The message in the bot's signature that's displayed when it's online.
+# It's possible that the bot cannot update the signature due to a crash or any mode of failure,
+# therefore it is recommended to mention here that the bot might be offline.
+
+on_error = "While parsing that command, an error occured:"
+# The message used when the bot encounters an error while parsing a command.
+
+no_output = "[i]Command is successfully executed, but did not provide any output.[/i]"
+# The message used when a command is parsed correctly, but does not provide any output.
+
+
+[bot.auth]
+# Authentication data. Fill these with your account's credentials.
+username = "Rontgen"
+# password = "its_a_secret"
+# The password is still stored in pass.txt
+
+
+[topics]
+# A table of topics. The keys are topic IDs.
+[topics.170]
+types = ["tbg", "hub"]
+# Exclusive commands that work 
+exclusive_commands = ["rolladice", "rolldice"]
