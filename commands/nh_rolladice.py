@@ -8,10 +8,13 @@ alt_minvers = {}
 
 did_roll = False
 
+# TODO: Replace with something else
+"""
 with open("botInfo.json", "r", encoding="utf-8") as infofile:
     bot_info = json.loads(infofile.read())  # Info about the bot.
 
 pc_len = datetime.timedelta(seconds=bot_info["cycleDelay"])
+"""
 
 
 def roll_a_dice(bot_data, thread_data, user_data, action="roll"):

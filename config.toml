@@ -10,7 +10,7 @@ id = "rontgen"
 # The internal ID of the bot. 
 # This is used for selecting supported commands.
 
-all_topics = false
+all_topics = true
 # If true, Roentgenium will respond to pings no matter what topic it is posted at.
 
 ignore_list = [
@@ -52,7 +52,7 @@ no_output = "[i]Command is successfully executed, but did not provide any output
 
 [bot.auth]
 # Authentication data. Fill these with your account's credentials.
-username = "Rontgen"
+username = "Clicky"
 # password = "its_a_secret"
 # The password is still stored in pass.txt
 
@@ -62,4 +62,4 @@ username = "Rontgen"
 [topics.170]
 types = ["tbg", "hub"]
 # Exclusive commands that work 
-exclusive_commands = ["rolladice", "rolldice"]
+# exclusive_commands = ["rolladice", "rolldice"]

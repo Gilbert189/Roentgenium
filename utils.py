@@ -6,38 +6,22 @@ class InlineDict(MutableMapping):
 
     def __init__(self, store, key):
         self.store = store
-        if type(key) is str:
-            key = key.encode()
-        elif type(key) is not bytes:
-            raise TypeError("inline dicts only supports strings or bytes")
         self.key = key
 
     def __getitem__(self, key):
-        if type(key) is str:
-            key = key.encode()
-        elif type(key) is not bytes:
-            raise TypeError("inline dicts only supports strings or bytes")
         assert not (self.strict and "." in key), "Key contains a dot"
-        return self.store[self.key + b"." + key]
+        return self.store[self.key + "." + key]
 
     def __setitem__(self, key, value):
-        if type(key) is str:
-            key = key.encode()
-        elif type(key) is not bytes:
-            raise TypeError("inline dicts only supports strings or bytes")
         assert not (self.strict and "." in key), "Key contains a dot"
-        self.store[self.key + b"." + key] = value
+        self.store[self.key + "." + key] = value
 
     def __delitem__(self, key):
-        if type(key) is str:
-            key = key.encode()
-        elif type(key) is not bytes:
-            raise TypeError("inline dicts only supports strings or bytes")
         assert not (self.strict and "." in key), "Key contains a dot"
-        del self.store[self.key + b"." + key]
+        del self.store[self.key + "." + key]
 
     def __iter__(self):
-        search_for = self.key + b"."
+        search_for = self.key + "."
         return (
             k[len(search_for):]
             for k in self.store.keys()
