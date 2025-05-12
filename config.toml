@@ -30,6 +30,9 @@ publish_loop = 60
 no_publish_loop = 1
 # ...to wait for messages in the outbox when it is empty.
 
+siggy_loop = 900  # 15 mins
+# ...to update the bot's signature
+
 
 [bot.strings]
 tagline = "A bot for the TBGs, round 2."
@@ -49,12 +52,20 @@ on_error = "While parsing that command, an error occured:"
 no_output = "[i]Command is successfully executed, but did not provide any output.[/i]"
 # The message used when a command is parsed correctly, but does not provide any output.
 
+footer = """
+[font=Noto Sans](◕◡◕)[/font]
+Hi! I'm Clicky. Currently My Creator used my account for Roentgenium, an up-and-coming Nihonium fork for SMF.
+Once Roentgenium gone gold, she will have their own TBG account. Stay tuned!"""
+# The message added in the bot's signature's footer. This could be used to give a persistent message.
+# Set to blank if not needed.
+
 
 [bot.auth]
 # Authentication data. Fill these with your account's credentials.
 username = "Clicky"
 # password = "its_a_secret"
-# The password is still stored in pass.txt
+# Alternatively, the password can still be stored in pass.txt
+# This is useful if you want to publish your bot to some place like GitHub.
 
 
 [topics]

@@ -21,14 +21,14 @@ parser.add_argument('-v', '--verbose',
                     )
 parser.add_argument('-I', '--repl',
                     action='store_true',
-                    help='Enter REPL mode, where'
+                    help='Enter REPL mode'
                     )
 args = parser.parse_args()
 
 logger = logging.getLogger("rontgen" if __name__ == "__main__" else __name__)
 logging.basicConfig(format="%(levelname)s@%(name)s: %(message)s", level=args.verbose)
 
-nihonium_version = versions.Version(0, 14, 0)
+nihonium_version = versions.Version(0, 15, 0)
 """The version of the base nihonium install; try not to modify this"""
 fork_version = versions.Version(0, 15, 0)
 """The version of the current fork"""
@@ -231,7 +231,7 @@ def parse_commands(msg: Message):
         # Don't forget to reference the quote.
         response = f"[quote author={msg.user.name} link=msg={msg.mid} date={msg.date:%s}]{command_string}[/quote]\n{response}"
         responses.append(response)
-    
+
     return responses
 
 
@@ -269,7 +269,7 @@ async def process_loop():
 
                         # Do some metrics.
                         processed_alerts += 1
-                        db["last_aid"] = aid
+                        db["last_aid"] = max(db["last_aid"], aid)
                 total_alerts += 1
             logger.info(f"Done retrieving alerts. Processed {processed_alerts} out of {total_alerts} alerts.")
             db.sync()
@@ -289,6 +289,7 @@ async def publish_loop():
             logger.info(f"Need to publish {len(tids_todo)} messages: {tids_todo}")
             for tid in tids_todo:
                 logger.info(f"Posting response for topic ID {tid}")
+
                 # Sometimes the list given is blank (because no commands gave any result)
                 if len(outbox_messages[tid]) > 0:
                     msg = Message(
@@ -302,6 +303,7 @@ async def publish_loop():
                 else:
                     logger.info("Response has no content, aborting")
                     await asyncio.sleep(bot_info["periods"]["no_publish_loop"])
+
                 # Either posted or not, we can delete it from the outbox
                 del outbox_messages[tid]
                 db.sync()
@@ -311,7 +313,39 @@ async def publish_loop():
         outbox_attention.clear()
 
 
-async def main_loop():
+async def update_siggy(session: Session, going_down=False):
+    """Update the bot's signature."""
+    logger.info("Updating signature")
+    # Retrieve the initial profile
+    user = session.user.update()
+
+    # Construct the siggy
+    siggy = ""
+    siggy += motd()
+    siggy += "\n[br]\n"
+    siggy += f"[b]{bot_info['name']}[/b] (version {fork_version})\n"
+    siggy += f"[i]{bot_info['strings']['tagline']}[/i]\n"
+    if going_down:
+        siggy += bot_info['strings']['offline']
+    else:
+        siggy += bot_info['strings']['online']
+
+    user.signature = siggy
+    user.blurb = bot_info['strings']['tagline']
+    if "footer" in bot_info['strings'] and bot_info['strings']['footer'].strip() != "":
+        siggy += "\n[br]\n"
+        siggy += bot_info['strings']['footer']
+    user.submit()
+
+
+async def siggy_loop(session: Session):
+    """Update the bot's signature periodically."""
+    while True:
+        await siggy_loop(session, going_down=False)
+        await asyncio.sleep(bot_info["periods"]["siggy_loop"])
+
+
+async def main_loop(session: Session):
     """Starts everything that Roentgenium needs."""
     logger.info("Enter main loop")
     statistics.setdefault("parse_cycles", 0)
@@ -328,14 +362,20 @@ async def main_loop():
             break
 
     try:
-        await asyncio.gather(
+        task = asyncio.gather(
             process_loop(),
             publish_loop(),
+            siggy_loop(session),
         )
+        await task
         return 0
     except Exception:
         logger.critical("Main loop caught an exception:\n" + traceback.format_exc())
         return 1
+    finally:
+        logger.critical("Roentgenium is going to shut down now!")
+        task.cancel("Shutting down")
+        await update_siggy(session, going_down=True)
 
 
 # Log in to the TBGs.
