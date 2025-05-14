@@ -13,4 +13,4 @@ files/
 logs/
 .github/
 docs/suggestions2.txt
-persistent.store
+persistent.data

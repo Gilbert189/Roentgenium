@@ -47,14 +47,16 @@ def dice(bot_data, thread_data, user_data, num=1, size=20):
 
 def bot(bot_data, thread_data, user_data):
     output = "Bot Statistics:"
-    output += "\n  Nihonium Version: " + str(bot_data["version"])
-    output += "\n  Fork Version: " + str(bot_data["forkversion"])
-    output += "\n  Uptime: " + str(datetime.datetime.now() - bot_data["uptime"])
-    output += "\n  Parse Cycles: " + str(bot_data["data"]["parse_cycles"])
-    output += "\n  Commands Found: " + str(bot_data["data"]["commands_found"])
-    output += "\n  Commands Parsed: " + str(bot_data["data"]["commands_parsed"])
-    output += "\n  Valid Commands: " + str(bot_data["data"]["valid_commands"])
-    output += "\n  Threads Parsed: " + str(bot_data["thread_ids"])
+    output += "[table]"
+    output += f"\n[tr][td]Nihonium Version:  [/td][td]{bot_data['version']}[/td][/tr]"
+    output += f"\n[tr][td]Fork Version:  [/td][td]{bot_data['forkversion']}[/td][/tr]"
+    output += f"\n[tr][td]Uptime:  [/td][td]{datetime.datetime.now() - bot_data['uptime']}[/td][/tr]"
+    output += f"\n[tr][td]Parse Cycles:  [/td][td]{bot_data['data']['parse_cycles']}[/td][/tr]"
+    output += f"\n[tr][td]Commands Found:  [/td][td]{bot_data['data']['commands_found']}[/td][/tr]"
+    output += f"\n[tr][td]Commands Parsed:  [/td][td]{bot_data['data']['commands_parsed']}[/td][/tr]"
+    output += f"\n[tr][td]Valid Commands:  [/td][td]{bot_data['data']['valid_commands']}[/td][/tr]"
+    output += f"\n[tr][td]Alerts Received:  [/td][td]{bot_data['data']['alerts_received']}[/td][/tr]"
+    output += "[/table]"
     return output
 
 
@@ -86,30 +88,32 @@ def suggest(bot_data, thread_data, user_data, *suggestion):
 
 
 def threadInfo(bot_data, thread_data, user_data):
-    adate = datetime.datetime(thread_data["date"]["year"], thread_data["date"]["month"], thread_data["date"]["day"],
-                              thread_data["date"]["hour"], thread_data["date"]["minute"], thread_data["date"]["second"])
-    bdate = datetime.datetime.now()
-    diff = bdate - adate
-    ppd = thread_data["recentPost"] / (diff.days + (diff.seconds / 86400))
+    first_post_date = thread_data["first_post"]
+    today_date = datetime.datetime.now()
+    diff = today_date - first_post_date
+    ppd = thread_data["store"]["recent_post"] / (diff.days + (diff.seconds / 86400))
     output = "Thread Info:"
-    output += "\n  Name: " + str(thread_data["name"])
-    output += "\n  ID: " + str(thread_data["thread_id"])
-    output += "\n  Types: " + str(thread_data["types"])
-    output += "\n  Date: " + adate.strftime("%b %d, %Y %I:%M:%S %p")
-    output += "\n  Posts/Day: ~" + str(round(ppd, 5))
-    output += "\n  Posts/Hour: ~" + str(round(ppd/24, 5))
-    if "goal" in thread_data: output += "\n  Goal: " + str(thread_data["goal"])
-    if "postID" in thread_data["types"]:
-        output += (
-            "\n  Completion: " + str(round((thread_data["recentPost"]/thread_data["goal"])*100, 2)) + "% "
-            "(" + str(thread_data["recentPost"]) + "/" + str(thread_data["goal"]) + ")"
-        )
-        until = thread_data["goal"] / ppd
-        cdate = adate + datetime.timedelta(days=until)
-        output += "\n  Est. Completion Date: " + cdate.strftime("%b %d, %Y %I:%M:%S %p")
+    output += f"\n  Name: {thread_data['name']}"
+    output += f"\n  ID: {thread_data['thread_id']}"
+    output += f"\n  Types: {thread_data['types']}"
+    output += f"\n  Date: {first_post_date:%b %d, %Y %I:%M:%S %p}"
+    output += f"\n  Posts/Day: ~{round(ppd, 5)}"
+    output += f"\n  Posts/Hour: ~{round(ppd/24, 5)}"
+    if "goal" in thread_data:
+        output += f"\n  Goal: {thread_data['goal']}"
+        if "postID" in thread_data["types"]:
+            progress = thread_data["recentPost"] / thread_data["goal"]
+            output += (
+                f"\n  Completion: {round(progress*100, 2)} % "
+                f"({thread_data['recentPost']}/{thread_data['goal']})"
+            )
+            until = thread_data["goal"] / ppd
+            complete_date = first_post_date + datetime.timedelta(days=until)
+            output += f"\n  Est. Completion Date: {complete_date:%b %d, %Y %I:%M:%S %p}"
     return output
 
 
+# TODO: rewrite this to use thread_data["store"]
 def estimate(bot_data, thread_data, user_data, tID=None):
     # fix allowing you to estimate non-tracked threads
     if tID is None:

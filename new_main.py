@@ -34,7 +34,7 @@ fork_version = versions.Version(0, 15, 0)
 """The version of the current fork"""
 
 
-db = shelve.open("persistent.store", writeback=True)
+db = shelve.open("persistent.data", writeback=True)
 # As cool as Nihonium's TUI is, it's nothing but bells and whistles, so we're getting rid of it
 # This will be a systemd service anyway
 statistics = InlineDict(db, "stats")
@@ -43,7 +43,7 @@ uptime = datetime.datetime.now()
 outbox_messages = InlineDict(db, "outbox")
 """Messages that's going to be posted to the TBGs."""
 outbox_lock = asyncio.Lock()
-"""Ensures either :py:func:`process_loop()` or the :py:func:`publish_loop()` is touching the outbox."""
+"""Ensures only one async function is touching the outbox."""
 outbox_attention = asyncio.Event()
 """Tells :py:func:`publish_loop()` if new messages is waiting to be published."""
 
@@ -121,7 +121,7 @@ def assemble_botdata():
 
 def assemble_threaddata(tid: int):
     # TODO: replace the stub with something configurable
-    return {**topic_info.get(str(tid), {}), "thread_id": tid}
+    return {**topic_info.get(str(tid), {}), "thread_id": tid, "store": InlineDict(db, f"topic.{tid}")}
 
 
 def assemble_userdata(user: User):
@@ -132,6 +132,7 @@ def assemble_userdata(user: User):
 
 
 def parse_commands(msg: Message):
+    my_logger = logger.getChild('parse_commands')
     # Escape the [quote], [spoiler], and [code] tags.
     # This is a quick and dirty regex pattern for parsing BBC tags
     # and also the reason why we use the external "regex" instead of the built-in "re"
@@ -156,13 +157,13 @@ def parse_commands(msg: Message):
 
     # Process every parsed commands.
     command_pattern = regex.compile(fr"^\[member.*\]{regex.escape(bot_info['auth']['username'])}\[/member\] (\w.*)")
-    logger.debug(f"Parsing message {escaped_text!r} with pattern {command_pattern}")
+    my_logger.debug(f"Parsing message {escaped_text!r} with pattern {command_pattern}")
     responses = []
     for command_line in command_pattern.finditer(escaped_text):
         statistics["commands_found"] += 1
         words = regex.split(r"\s+", command_line[1].strip())
         command_string = " ".join(words)
-        logger.debug(f"[!] Parsing command {command_string!r}")
+        my_logger.debug(f"[!] Parsing command {command_string!r}")
 
         # Execute the command, if it exists or allowed.
         command_name, *arguments = words
@@ -171,33 +172,33 @@ def parse_commands(msg: Message):
             # Should we respond to this command?
             if not bot_info["all_topics"] and str(msg.tid) not in topic_info:
                 # No trespassing.
-                logger.debug("[X] No trespassing, aborting")
+                my_logger.debug("[X] No trespassing, aborting")
                 continue
             if (
                 "exclusive_commands" in topic_info.get(str(msg.tid), {})
                 and command_name in topic_info[str(msg.tid)]["exclusive_commands"]
             ):
                 # This condition overrides the bottom one.
-                logger.debug("[!] Exclusive command, continuing")
+                my_logger.debug("[!] Exclusive command, continuing")
                 pass
             elif command_name in incompatible_commands:
                 # Not supposed to use this command.
-                logger.debug("[X] Incompatible command, aborting")
+                my_logger.debug("[X] Incompatible command, aborting")
                 continue
             if msg.user.name in bot_info["ignore_list"]:
                 # I don't like this user.
-                logger.debug("[X] User in ignore list, aborting")
+                my_logger.debug("[X] User in ignore list, aborting")
                 continue
 
             # Does this command even exist?
             if command_name in commands.commands:
-                logger.debug("[!] Identified command as a standard command.")
+                my_logger.debug("[!] Identified command as a standard command.")
                 command = commands.commands[command_name]
             elif bot_info["id"] in commands.ex_commands:
-                logger.debug("[!] Identified command as an extra command.")
+                my_logger.debug("[!] Identified command as an extra command.")
                 command = commands.ex_commands[bot_info["id"]]
             else:
-                logger.debug("[X] Unknown command, aborting.")
+                my_logger.debug("[X] Unknown command, aborting.")
                 continue
 
             # If so, then do it!
@@ -208,20 +209,20 @@ def parse_commands(msg: Message):
                 assemble_userdata(msg.user),
                 *arguments
             )
-            logger.debug(f"[!] Command outputted {output!r}")
+            my_logger.debug(f"[!] Command outputted {output!r}")
             if output == "":
                 # No idea why this is distinguished with output being None
                 # maybe ask reali for this one
                 response = ""
             elif output is None:
-                logger.warning(f"Command produces no output: {command_string!r}")
+                my_logger.warning(f"Command produces no output: {command_string!r}")
                 response = bot_strings['no_output']
             else:
                 response = output
                 statistics["commands_parsed"] += 1
         except (TypeError, ValueError, KeyError, IndexError, OverflowError, ZeroDivisionError):
             stack_trace = traceback.format_exc()
-            logger.error(
+            my_logger.error(
                 f"Error processing {command_string!r}:\n"
                 f"{stack_trace}"
             )
@@ -239,11 +240,12 @@ def parse_commands(msg: Message):
 # But since Nihonium uses it, we might as well use it anyway
 async def process_loop():
     """Retrieves all new alerts, processes them, and store them in the outbox."""
+    my_logger = logger.getChild('process_loop')
     from itertools import chain
 
     while True:
         # Retrieve all new alerts.
-        logger.info("Retrieving alerts")
+        my_logger.info("Retrieving alerts")
         statistics["parse_cycles"] += 1
         total_alerts = 0
         processed_alerts = 0
@@ -254,7 +256,7 @@ async def process_loop():
                 match alert:
                     case Alert.Mentioned(aid=aid, msg=msg) if aid > last_aid:
                         # We got a ping.
-                        logger.info(f"Got alert ID {aid}")
+                        my_logger.info(f"Got alert ID {aid}")
                         statistics["alerts_received"] += 1
 
                         # Process them.
@@ -262,7 +264,7 @@ async def process_loop():
                         msg = msg.update(method="quotefast")  # this retrieves the BBC instead of the raw HTML
                         outbox_messages.setdefault(str(msg.tid), [])
                         result = parse_commands(msg)
-                        logger.debug(f"Command resulted in {result=}")
+                        my_logger.debug(f"Command resulted in {result=}")
                         if len(result) > 0:  # we got something!
                             outbox_messages[str(msg.tid)].extend(result)
                             outbox_attention.set()
@@ -271,7 +273,7 @@ async def process_loop():
                         processed_alerts += 1
                         db["last_aid"] = max(db["last_aid"], aid)
                 total_alerts += 1
-            logger.info(f"Done retrieving alerts. Processed {processed_alerts} out of {total_alerts} alerts.")
+            my_logger.info(f"Done retrieving alerts. Processed {processed_alerts} out of {total_alerts} alerts.")
             db.sync()
 
         await asyncio.sleep(bot_info["periods"]["process_loop"])
@@ -279,6 +281,7 @@ async def process_loop():
 
 async def publish_loop():
     """Retrieves all messages in the outbox and POSTs them."""
+    my_logger = logger.getChild('process_loop')
     while True:
         # Wait until we get something
         await outbox_attention.wait()
@@ -286,9 +289,9 @@ async def publish_loop():
         # HACK: need to iterate through a tuple since we're going to delete the keys
         async with outbox_lock:
             tids_todo = tuple(outbox_messages)
-            logger.info(f"Need to publish {len(tids_todo)} messages: {tids_todo}")
+            my_logger.info(f"Need to publish {len(tids_todo)} messages: {tids_todo}")
             for tid in tids_todo:
-                logger.info(f"Posting response for topic ID {tid}")
+                my_logger.info(f"Posting response for topic ID {tid}")
 
                 # Sometimes the list given is blank (because no commands gave any result)
                 if len(outbox_messages[tid]) > 0:
@@ -298,17 +301,17 @@ async def publish_loop():
                         content="\n\n".join(outbox_messages[tid]),
                     )
                     msg.submit()
-                    logger.debug("Response posted")  # IDEA: tell what ID the new message is posted?
+                    my_logger.debug("Response posted")  # IDEA: tell what ID the new message is posted?
                     await asyncio.sleep(bot_info["periods"]["publish_loop"])
                 else:
-                    logger.info("Response has no content, aborting")
+                    my_logger.info("Response has no content, aborting")
                     await asyncio.sleep(bot_info["periods"]["no_publish_loop"])
 
                 # Either posted or not, we can delete it from the outbox
                 del outbox_messages[tid]
                 db.sync()
 
-        logger.debug("Done publishing the outbox for now.")
+        my_logger.debug("Done publishing the outbox for now.")
         await asyncio.sleep(bot_info["periods"]["no_publish_loop"])
         outbox_attention.clear()
 
@@ -341,8 +344,30 @@ async def update_siggy(session: Session, going_down=False):
 async def siggy_loop(session: Session):
     """Update the bot's signature periodically."""
     while True:
-        await siggy_loop(session, going_down=False)
+        await update_siggy(session, going_down=False)
         await asyncio.sleep(bot_info["periods"]["siggy_loop"])
+
+
+async def scraping_loop(session: Session):
+    """Does anything related to scraping the TBGs."""
+    my_logger = logger.getChild("scraping_loop")
+    from tbgclient import api, parsers, Page
+
+    while True:
+        statistics["last_scrape"] = datetime.datetime.now().astimezone()
+        # For threadInfo, scrape the newest post in the topic listed in the config
+        for tid in topic_info:
+            tid = int(tid)
+            my_logger.info(f"Retrieving data of topic ID {tid}'s most recent post")
+
+            thread_data = assemble_threaddata(tid)
+            res = api.get_topic_page(session, tid, "new")
+            page = Page(**parsers.forum.parse_page(res.content, parsers.forum.parse_topic_content), content_type=Message)
+
+            total_posts = (page.total_pages-1) * api.TOPIC_PER_PAGE + len(page.contents)
+            thread_data["store"]["recent_post"] = total_posts
+
+        await asyncio.sleep(bot_info["periods"]["scraping_loop"])
 
 
 async def main_loop(session: Session):
@@ -354,6 +379,7 @@ async def main_loop(session: Session):
     statistics.setdefault("valid_commands", 0)
     statistics.setdefault("commands_parsed", 0)
     statistics.setdefault("errors_thrown", 0)
+    statistics.setdefault("last_scrape", None)
 
     # See if there's still some messages left in the outbox
     for tid in outbox_messages:
@@ -361,21 +387,20 @@ async def main_loop(session: Session):
             outbox_attention.set()
             break
 
+    exit_code = 0
     try:
-        task = asyncio.gather(
-            process_loop(),
-            publish_loop(),
-            siggy_loop(session),
-        )
-        await task
-        return 0
+        async with asyncio.TaskGroup() as group:
+            group.create_task(process_loop())
+            group.create_task(publish_loop())
+            group.create_task(siggy_loop(session))
+            group.create_task(scraping_loop(session))
     except Exception:
         logger.critical("Main loop caught an exception:\n" + traceback.format_exc())
-        return 1
+        exit_code = 1
     finally:
         logger.critical("Roentgenium is going to shut down now!")
-        task.cancel("Shutting down")
         await update_siggy(session, going_down=True)
+    return exit_code
 
 
 # Log in to the TBGs.
@@ -401,11 +426,12 @@ session.make_default()
 
 
 def run():
-    exit_code = asyncio.run(main_loop())
+    exit_code = asyncio.run(main_loop(session))
     db.close()
     exit(exit_code)
 
 
+# Action!
 if args.repl:
     import code
     code.interact(

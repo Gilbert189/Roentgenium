@@ -2,8 +2,14 @@ import versions
 from . import framework as fw
 import shutil, os, datetime, math
 
-version = versions.Version(1, 9, 0)
-nihonium_minver = versions.Version(0, 10, 3)
+# Make the directory if it doesn't exist
+try:
+    os.mkdir("files")
+except OSError:
+    pass
+
+version = versions.Version(2, 0, 0)
+nihonium_minver = versions.Version(0, 15, 0)
 alt_minvers = {}
 
 
