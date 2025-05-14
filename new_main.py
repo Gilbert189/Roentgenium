@@ -325,19 +325,21 @@ async def update_siggy(session: Session, going_down=False):
     # Construct the siggy
     siggy = ""
     siggy += motd()
-    siggy += "\n[br]\n"
+    siggy += "\n[hr]\n"
     siggy += f"[b]{bot_info['name']}[/b] (version {fork_version})\n"
-    siggy += f"[i]{bot_info['strings']['tagline']}[/i]\n"
+    siggy += f"[i] {bot_strings['tagline']}[/i]\n"
     if going_down:
-        siggy += bot_info['strings']['offline']
+        siggy += bot_strings['offline']
     else:
-        siggy += bot_info['strings']['online']
+        siggy += bot_strings['online']
+    if "footer" in bot_strings and bot_strings['footer'].strip() != "":
+        siggy += "\n[hr]\n"
+        siggy += bot_strings['footer']
+    # replace new lines with [br] allowing more than 8 lines
+    siggy = siggy.replace("\n", "[br]")
 
     user.signature = siggy
-    user.blurb = bot_info['strings']['tagline']
-    if "footer" in bot_info['strings'] and bot_info['strings']['footer'].strip() != "":
-        siggy += "\n[br]\n"
-        siggy += bot_info['strings']['footer']
+    user.blurb = bot_strings['tagline']
     user.submit()
 
 
