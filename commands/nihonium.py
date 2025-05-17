@@ -1,6 +1,6 @@
 import versions
 from . import framework as fw  # These imports are required. (The "as fw" is not required, and is only here to shorten lines.)
-import random, math, datetime, json  # These imports are dependent on what your commands need.
+import random, math, datetime, shelve  # These imports are dependent on what your commands need.
 
 # This file can be used as an example of a command file.
 
@@ -88,8 +88,8 @@ def suggest(bot_data, thread_data, user_data, *suggestion):
 
 
 def threadInfo(bot_data, thread_data, user_data):
-    first_post_date = thread_data["first_post"]
-    today_date = datetime.datetime.now()
+    first_post_date = thread_data["store"]["first_post_date"]
+    today_date = datetime.datetime.now().astimezone()
     diff = today_date - first_post_date
     ppd = thread_data["store"]["recent_post"] / (diff.days + (diff.seconds / 86400))
     output = "Thread Info:"
@@ -113,33 +113,36 @@ def threadInfo(bot_data, thread_data, user_data):
     return output
 
 
-# TODO: rewrite this to use thread_data["store"]
-def estimate(bot_data, thread_data, user_data, tID=None):
+def estimate(bot_data, thread_data, user_data, tid=None):
+    from utils import InlineDict
+    import tomllib
     # fix allowing you to estimate non-tracked threads
-    if tID is None:
-        tID = thread_data["thread_id"]
-    with open("threadData.json", "r+", encoding="utf-8") as threadfile:
-        post_ids = json.loads(threadfile.read())
-    thread_data2 = post_ids[str(tID)]
-    adate = datetime.datetime(thread_data2["date"]["year"], thread_data2["date"]["month"], thread_data2["date"]["day"],
-                              thread_data2["date"]["hour"], thread_data2["date"]["minute"], thread_data2["date"]["second"])
-    bdate = datetime.datetime.now()
-    diff = bdate - adate
-    ppd = thread_data2["recentPost"] / (diff.days + (diff.seconds / 86400))
-    if "postID" in thread_data2["types"]:
-        until = thread_data2["goal"] / ppd
-        cdate = adate + datetime.timedelta(days=until)
-        output = "Est. Completion Date: " + cdate.strftime("%b %d, %Y %I:%M:%S %p")
-        if len(thread_data2["estimates"]) >= 1:
-            output += "\nPrevious Estimates: [code]"
-            for i in thread_data2["estimates"]:
-                output += "\n(" + i[0] + ") " + i[1]
-            output += "[/code]"
-        thread_data2["estimates"].append([bdate.strftime("%b %d, %Y %I:%M:%S %p"), cdate.strftime("%b %d, %Y %I:%M:%S %p")])
-        with open("threadData.json", "w", encoding="utf-8") as f:
-            f.write(json.dumps(post_ids, indent=4))
-    else:
-        output = "Unknown thread ID: [i]" + str(tID) + "[/i]"
+    if tid is None:
+        tid = thread_data["thread_id"]
+    with shelve.open("persistent.data", "r") as db, open("config.toml", "r") as f:
+        config = tomllib.load(f)
+        topic_info = config["topics"]
+
+        if str(tid) in topic_info:
+            target_thread_data = topic_info[str(tid)]
+            target_thread_data["store"] = InlineDict(db, f"topic.{tid}")
+            first_post_date = target_thread_data["store"]["first_post_date"]
+            today_date = datetime.datetime.now().astimezone()
+            diff = today_date - first_post_date
+            ppd = thread_data["store"]["recent_post"] / (diff.days + (diff.seconds / 86400))
+
+            until = target_thread_data["goal"] / ppd
+            complete_date = first_post_date + datetime.timedelta(days=until)
+            output = f"Est. Completion Date: {complete_date:%b %d, %Y %I:%M:%S %p}"
+            if len(target_thread_data["store"].setdefault("estimates", [])) >= 1:
+                output += "\nPrevious Estimates: [code]"
+                for today, complete in target_thread_data["store"]["estimates"]:
+                    output += f"\n({today:%b %d, %Y %I:%M:%S %p}) {complete:%b %d, %Y %I:%M:%S %p}"
+                output += "[/code]"
+
+            target_thread_data["store"]["estimates"].append((today_date, complete_date))
+        else:
+            output = "Unknown thread ID: [i]" + str(tid) + "[/i]"
     return output
 
 

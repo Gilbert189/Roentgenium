@@ -7,7 +7,7 @@ import versions
 import commands
 from utils import InlineDict
 import regex
-from tbgclient import Session, User, Alert, Message
+from tbgclient import Session, User, Alert, Message, Topic
 import tbgclient
 
 parser = argparse.ArgumentParser(
@@ -30,7 +30,7 @@ logging.basicConfig(format="%(levelname)s@%(name)s: %(message)s", level=args.ver
 
 nihonium_version = versions.Version(0, 15, 0)
 """The version of the base nihonium install; try not to modify this"""
-fork_version = versions.Version(0, 15, 0)
+fork_version = versions.Version(0, 1, 0)
 """The version of the current fork"""
 
 
@@ -325,7 +325,7 @@ async def update_siggy(session: Session, going_down=False):
     # Construct the siggy
     siggy = ""
     siggy += motd()
-    siggy += "\n[hr]\n"
+    siggy += "\n[hr]"
     siggy += f"[b]{bot_info['name']}[/b] (version {fork_version})\n"
     siggy += f"[i] {bot_strings['tagline']}[/i]\n"
     if going_down:
@@ -333,7 +333,7 @@ async def update_siggy(session: Session, going_down=False):
     else:
         siggy += bot_strings['online']
     if "footer" in bot_strings and bot_strings['footer'].strip() != "":
-        siggy += "\n[hr]\n"
+        siggy += "\n[hr]"
         siggy += bot_strings['footer']
     # replace new lines with [br] allowing more than 8 lines
     siggy = siggy.replace("\n", "[br]")
@@ -360,9 +360,14 @@ async def scraping_loop(session: Session):
         # For threadInfo, scrape the newest post in the topic listed in the config
         for tid in topic_info:
             tid = int(tid)
-            my_logger.info(f"Retrieving data of topic ID {tid}'s most recent post")
 
+            my_logger.info(f"Retrieving data of topic ID {tid}'s most recent post")
             thread_data = assemble_threaddata(tid)
+            if "first_post" not in thread_data["store"]:
+                topic = Topic(tid=tid)
+                first_post = topic.get_page(1).contents[0]
+                thread_data["store"]["first_post_date"] = first_post.date
+
             res = api.get_topic_page(session, tid, "new")
             page = Page(**parsers.forum.parse_page(res.content, parsers.forum.parse_topic_content), content_type=Message)
 
