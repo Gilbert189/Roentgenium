@@ -79,3 +79,8 @@ types = ["tbg", "hub"]
 
 # exclusive_commands = ["rolladice", "rolldice"]
 # Exclusive commands that work 
+
+[topics.6648]
+types = ["tbg", "postID", "2^n"]
+goal = 65536
+# The post ID to reach to win the game. Comment this if no such goal exists.

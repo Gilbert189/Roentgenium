@@ -9,6 +9,7 @@ from utils import InlineDict
 import regex
 from tbgclient import Session, User, Alert, Message, Topic
 import tbgclient
+import requests
 
 parser = argparse.ArgumentParser(
     prog='Roentgenium',
@@ -28,7 +29,7 @@ args = parser.parse_args()
 logger = logging.getLogger("rontgen" if __name__ == "__main__" else __name__)
 logging.basicConfig(format="%(levelname)s@%(name)s: %(message)s", level=args.verbose)
 
-nihonium_version = versions.Version(0, 15, 0)
+nihonium_version = versions.Version(1, 0, 0, "uuu")
 """The version of the base nihonium install; try not to modify this"""
 fork_version = versions.Version(0, 1, 0)
 """The version of the current fork"""
@@ -47,7 +48,7 @@ outbox_lock = asyncio.Lock()
 outbox_attention = asyncio.Event()
 """Tells :py:func:`publish_loop()` if new messages is waiting to be published."""
 
-incompatible_commands = ()
+incompatible_commands = ("rolladice", "rolldice")
 """Commands this copy is incompatible with."""
 disabled_commands = ("rolladice", "rolldice")
 """Commands disabled in this copy. Overridden by `topics.<tid>.exclusive_commands`."""
@@ -101,6 +102,8 @@ def motd():
         "You can't roll right now, you can roll again in about 240 minutes.",
         "Spy!",
         "It pulls the strings and makes them ring.",
+        "aka Unununium",
+        "It's TV Time!",
     ])
 
 
@@ -156,7 +159,7 @@ def parse_commands(msg: Message):
     )
 
     # Process every parsed commands.
-    command_pattern = regex.compile(fr"^\[member.*\]{regex.escape(bot_info['auth']['username'])}\[/member\] (\w.*)")
+    command_pattern = regex.compile(fr"^\[member.*\]{regex.escape(bot_info['auth']['username'])}\[/member\] (\w.*)", regex.M)
     my_logger.debug(f"Parsing message {escaped_text!r} with pattern {command_pattern}")
     responses = []
     for command_line in command_pattern.finditer(escaped_text):
@@ -252,6 +255,7 @@ async def process_loop():
         last_aid = db.get("last_aid", 0)
 
         async with outbox_lock:
+            next_last_aid = db["last_aid"]
             for alert in chain.from_iterable(Alert.pages()):
                 match alert:
                     case Alert.Mentioned(aid=aid, msg=msg) if aid > last_aid:
@@ -271,8 +275,10 @@ async def process_loop():
 
                         # Do some metrics.
                         processed_alerts += 1
-                        db["last_aid"] = max(db["last_aid"], aid)
+                        next_last_aid = max(next_last_aid, aid)
                 total_alerts += 1
+            db["last_aid"] = next_last_aid
+
             my_logger.info(f"Done retrieving alerts. Processed {processed_alerts} out of {total_alerts} alerts.")
             db.sync()
 
@@ -361,12 +367,17 @@ async def scraping_loop(session: Session):
         for tid in topic_info:
             tid = int(tid)
 
-            my_logger.info(f"Retrieving data of topic ID {tid}'s most recent post")
+            my_logger.info(f"Retrieving data of topic ID {tid}")
             thread_data = assemble_threaddata(tid)
+            topic = Topic(tid=tid)
             if "first_post" not in thread_data["store"]:
-                topic = Topic(tid=tid)
-                first_post = topic.get_page(1).contents[0]
-                thread_data["store"]["first_post_date"] = first_post.date
+                page = topic.get_page(1)
+                first_post = page.contents[0]
+                thread_data["store"]["first_post_date"] = first_post.date.astimezone()
+            # get topic name
+            last_item = page.hierarchy[-1]
+            last_name, _last_url = last_item
+            thread_data["store"]["name"] = last_name
 
             res = api.get_topic_page(session, tid, "new")
             page = Page(**parsers.forum.parse_page(res.content, parsers.forum.parse_topic_content), content_type=Message)
@@ -395,12 +406,27 @@ async def main_loop(session: Session):
             break
 
     exit_code = 0
+
     try:
-        async with asyncio.TaskGroup() as group:
-            group.create_task(process_loop())
-            group.create_task(publish_loop())
-            group.create_task(siggy_loop(session))
-            group.create_task(scraping_loop(session))
+        while True:
+            try:
+                async with asyncio.TaskGroup() as group:
+                    group.create_task(scraping_loop(session))
+                    group.create_task(process_loop())
+                    group.create_task(publish_loop())
+                    group.create_task(siggy_loop(session))
+            except* requests.exceptions.ConnectionError:  # this is given a higher priority
+                logger.critical("Main loop caught a connection error. Is the Internet alright?\n" + traceback.format_exc())
+                # Try to log in again, just in case the auth cookie timed out when we lost contact
+                logger.critical("Re-establishing connection to the TBGs")
+                while True:
+                    try:
+                        session.login(bot_info["auth"]["username"], password)
+                    except requests.exceptions.ConnectionError:
+                        await asyncio.sleep(1)
+                    else:
+                        break
+                logger.critical("Reconnected")
     except Exception:
         logger.critical("Main loop caught an exception:\n" + traceback.format_exc())
         exit_code = 1
@@ -408,6 +434,14 @@ async def main_loop(session: Session):
         logger.critical("Roentgenium is going to shut down now!")
         await update_siggy(session, going_down=True)
     return exit_code
+
+
+# These functions are here for administrative purposes.
+def clear_outbox():
+    """Clear all the pending messages in the outbox."""
+    for tid in list(outbox_messages.keys()):
+        logger.info(f"Deleting outbox for topic ID {tid}")
+        del outbox_messages[tid]
 
 
 # Log in to the TBGs.
@@ -426,8 +460,8 @@ except OSError:
         import getpass
         password = getpass.getpass("Enter password: ")
 
-logger.info("Logging in as " + bot_info["auth"]["username"])
 session = Session()
+logger.info("Logging in as " + bot_info["auth"]["username"])
 session.login(bot_info["auth"]["username"], password)
 session.make_default()
 

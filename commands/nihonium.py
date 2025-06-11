@@ -1,11 +1,11 @@
 import versions
 from . import framework as fw  # These imports are required. (The "as fw" is not required, and is only here to shorten lines.)
-import random, math, datetime, shelve  # These imports are dependent on what your commands need.
+import random, math, datetime  # These imports are dependent on what your commands need.
 
 # This file can be used as an example of a command file.
 
-version = versions.Version(1, 9, 1)  # This defines the version of the user-added commands.
-nihonium_minver = versions.Version(0, 13, 0)  # This defines the minimum version of Nihonium needed to run these commands.
+version = versions.Version(2, 0, 0)  # This defines the version of the user-added commands.
+nihonium_minver = versions.Version(0, 15, 0)  # This defines the minimum version of Nihonium needed to run these commands.
 alt_minvers = {"nihonium2": versions.Version(0, 13, 0)}  # Used to define minimum versions for other bots. Format: {"<id>": versions.Version(<version>)}
 
 # Commands can take any number of placement arguments and should return a string containing the output of the command.
@@ -93,56 +93,50 @@ def threadInfo(bot_data, thread_data, user_data):
     diff = today_date - first_post_date
     ppd = thread_data["store"]["recent_post"] / (diff.days + (diff.seconds / 86400))
     output = "Thread Info:"
-    output += f"\n  Name: {thread_data['name']}"
-    output += f"\n  ID: {thread_data['thread_id']}"
-    output += f"\n  Types: {thread_data['types']}"
-    output += f"\n  Date: {first_post_date:%b %d, %Y %I:%M:%S %p}"
-    output += f"\n  Posts/Day: ~{round(ppd, 5)}"
-    output += f"\n  Posts/Hour: ~{round(ppd/24, 5)}"
+    output += "[table]"
+    output += f"\n[tr][td]Name:  [/td][td]{thread_data['store']['name']}[/td][/tr]"
+    output += f"\n[tr][td]ID:  [/td][td]{thread_data['thread_id']}[/td][/tr]"
+    output += f"\n[tr][td]Types:  [/td][td]{thread_data.get('types', [])}[/td][/tr]"
+    output += f"\n[tr][td]Date:  [/td][td]{first_post_date:%b %d, %Y %I:%M:%S %p}[/td][/tr]"
+    output += f"\n[tr][td]Posts/Day:  [/td][td]~{round(ppd, 5)}[/td][/tr]"
+    output += f"\n[tr][td]Posts/Hour:  [/td][td]~{round(ppd/24, 5)}[/td][/tr]"
     if "goal" in thread_data:
-        output += f"\n  Goal: {thread_data['goal']}"
+        output += f"\n[tr][td]Goal:  [/td][td]{thread_data['goal']}[/td][/tr]"
         if "postID" in thread_data["types"]:
-            progress = thread_data["recentPost"] / thread_data["goal"]
+            progress = thread_data["store"]["recent_post"] / thread_data["goal"]
             output += (
-                f"\n  Completion: {round(progress*100, 2)} % "
-                f"({thread_data['recentPost']}/{thread_data['goal']})"
+                f"\n[tr][td]Completion:  [/td][td]{round(progress*100, 2)} % "
+                f"({thread_data['store']['recent_post']}/{thread_data['goal']})[/td][/tr]"
             )
             until = thread_data["goal"] / ppd
             complete_date = first_post_date + datetime.timedelta(days=until)
-            output += f"\n  Est. Completion Date: {complete_date:%b %d, %Y %I:%M:%S %p}"
+            output += f"\n[tr][td]Est. Completion Date:[/td][td]{complete_date:%b %d, %Y %I:%M:%S %p}[/td][/tr]"
+    output += "[/table]"
     return output
 
 
-def estimate(bot_data, thread_data, user_data, tid=None):
-    from utils import InlineDict
-    import tomllib
-    # fix allowing you to estimate non-tracked threads
-    if tid is None:
-        tid = thread_data["thread_id"]
-    with shelve.open("persistent.data", "r") as db, open("config.toml", "r") as f:
-        config = tomllib.load(f)
-        topic_info = config["topics"]
+def estimate(bot_data, thread_data, user_data):
+    # nofix: removed the feature on estimating other topics, for two reasons
+    # 1. coupling = bad
+    # 2. now not possible since only one thing can open the shelve
+    if "goal" in thread_data:
+        first_post_date = thread_data["store"]["first_post_date"]
+        today_date = datetime.datetime.now().astimezone()
+        diff = today_date - first_post_date
+        ppd = thread_data["store"]["recent_post"] / (diff.days + (diff.seconds / 86400))
 
-        if str(tid) in topic_info:
-            target_thread_data = topic_info[str(tid)]
-            target_thread_data["store"] = InlineDict(db, f"topic.{tid}")
-            first_post_date = target_thread_data["store"]["first_post_date"]
-            today_date = datetime.datetime.now().astimezone()
-            diff = today_date - first_post_date
-            ppd = thread_data["store"]["recent_post"] / (diff.days + (diff.seconds / 86400))
+        until = thread_data["goal"] / ppd
+        complete_date = first_post_date + datetime.timedelta(days=until)
+        output = f"Est. Completion Date: {complete_date:%b %d, %Y %I:%M:%S %p}"
+        if len(thread_data["store"].setdefault("estimates", [])) >= 1:
+            output += "\nPrevious Estimates: [code]"
+            for today, complete in thread_data["store"]["estimates"]:
+                output += f"\n({today:%b %d, %Y %I:%M:%S %p}) {complete:%b %d, %Y %I:%M:%S %p}"
+            output += "[/code]"
 
-            until = target_thread_data["goal"] / ppd
-            complete_date = first_post_date + datetime.timedelta(days=until)
-            output = f"Est. Completion Date: {complete_date:%b %d, %Y %I:%M:%S %p}"
-            if len(target_thread_data["store"].setdefault("estimates", [])) >= 1:
-                output += "\nPrevious Estimates: [code]"
-                for today, complete in target_thread_data["store"]["estimates"]:
-                    output += f"\n({today:%b %d, %Y %I:%M:%S %p}) {complete:%b %d, %Y %I:%M:%S %p}"
-                output += "[/code]"
-
-            target_thread_data["store"]["estimates"].append((today_date, complete_date))
-        else:
-            output = "Unknown thread ID: [i]" + str(tid) + "[/i]"
+        thread_data["store"]["estimates"].append((today_date, complete_date))
+    else:
+        output = "This topic does not have a set goal."
     return output
 
 
@@ -171,7 +165,7 @@ bot_command = fw.Command("bot", bot, [], helpShort="Returns various statistics a
 help_command = fw.Command("help", _help, [])
 suggest_command = fw.Command("suggest", suggest, [fw.CommandInput("suggestion", "str")])
 ti_command = fw.Command("threadInfo", threadInfo, [])
-esti_command = fw.Command("estimate", estimate, [fw.CommandInput("tID", "int", "<current_thread>")])
+esti_command = fw.Command("estimate", estimate, [])
 choose_command = fw.Command("choose", choose, [fw.CommandInput("options", "multi_str")])
 
 # This registers the commands for use by Nihonium.
