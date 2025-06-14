@@ -1,6 +1,8 @@
-# This file provides some framwork for commands, including a class for commands.
+# This file provides some framework for commands, including a class for commands.
 # It also provides access to the logEntry() function.
-import typing, datetime
+import datetime
+from typing import List
+from collections.abc import Callable
 
 
 # from main.py
@@ -44,7 +46,7 @@ class CommandInput:
 
 class Command:
     """A class for implimenting commands."""
-    def __init__(self, name: str, command: typing.Callable[..., str], inputs: typing.List[CommandInput], *, helpShort: str = "", helpLong: str = ""):
+    def __init__(self, name: str, command: Callable[..., str], inputs: List[CommandInput], *, helpShort: str = "", helpLong: str = ""):
         self.name = name
         self.command = command
         self.inputs = inputs
