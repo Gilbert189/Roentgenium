@@ -1,5 +1,5 @@
 body {
-    background: #f7efdf;
+    background: #cdfbff; /* #f7efdf; */
     font-family: sans-serif;
     font-size: 14px;
     padding-left: 15px;
@@ -11,7 +11,7 @@ p {
 div.command {
     border: 5px solid white;
     border-radius: 12px;
-    background: #fffbf3;
+    background: #eefdff;
     padding: 5px;
     margin-bottom: 15px;
 }
@@ -150,5 +150,5 @@ li.compat_very, li.compat_semi, li.compat_not, li.rec_very, li.rec_semi, li.rec_
     font-weight: bold;
 }
 .command .command {
-    background: #f7efdf;
+    background: #cdfbff;
 }
