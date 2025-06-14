@@ -74,7 +74,7 @@ def _help(bot_data, thread_data, user_data):
     output += "\n[quote]  nh!choose options;multi_str;no_spaces\n    Picks one of the given options.[/quote]"
     output += "\n[quote]  nh!estimate action;str;no_spaces;'roll'\n    Used for [topic=5893]TGOHNRADFYASWH[/topic].[/quote]"
     output += "\nArguments are in the form \"name;type;spaces;default\". Arguments with no default are required, [i]spaces[/i] is only present for strings."
-    output += "\nFor more information (updated quicker), visit [url=https://realicraft.github.io/Nihonium/index.html]the webpage[/url]."
+    output += "\nFor more information (updated quicker), visit [url=https://gilbertdlo.my.id/Roentgenium/index.html]the webpage[/url]."
     output += "\n(Note: I plan on adding a system to auto-generate the results of this command. It hasn't been added yet, though.)"
     return output
 
