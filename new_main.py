@@ -252,7 +252,7 @@ async def process_loop():
         statistics["parse_cycles"] += 1
         total_alerts = 0
         processed_alerts = 0
-        last_aid = db.get("last_aid", 0)
+        last_aid = db.setdefault("last_aid", 0)
 
         async with outbox_lock:
             next_last_aid = db["last_aid"]
