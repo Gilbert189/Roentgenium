@@ -415,7 +415,7 @@ async def main_loop(session: Session):
                     group.create_task(process_loop())
                     group.create_task(publish_loop())
                     group.create_task(siggy_loop(session))
-            except* requests.exceptions.ConnectionError:  # this is given a higher priority
+            except* (requests.exceptions.RequestException):  # this is given a higher priority
                 logger.critical("Main loop caught a connection error. Is the Internet alright?\n" + traceback.format_exc())
                 # Try to log in again, just in case the auth cookie timed out when we lost contact
                 logger.critical("Re-establishing connection to the TBGs")
