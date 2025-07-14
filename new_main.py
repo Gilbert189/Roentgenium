@@ -4,7 +4,7 @@ from pprint import pformat
 
 # custom modules
 import versions
-import commands
+import old_commands
 from utils import InlineDict
 import regex
 from tbgclient import Session, User, Alert, Message, Topic
@@ -194,12 +194,12 @@ def parse_commands(msg: Message):
                 continue
 
             # Does this command even exist?
-            if command_name in commands.commands:
+            if command_name in old_commands.commands:
                 my_logger.debug("[!] Identified command as a standard command.")
-                command = commands.commands[command_name]
-            elif bot_info["id"] in commands.ex_commands:
+                command = old_commands.commands[command_name]
+            elif bot_info["id"] in old_commands.ex_commands:
                 my_logger.debug("[!] Identified command as an extra command.")
-                command = commands.ex_commands[bot_info["id"]]
+                command = old_commands.ex_commands[bot_info["id"]]
             else:
                 my_logger.debug("[X] Unknown command, aborting.")
                 continue
