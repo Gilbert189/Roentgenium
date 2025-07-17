@@ -5,6 +5,8 @@ from pprint import pformat
 # custom modules
 import versions
 import old_commands
+import commands
+from commands import Context
 from utils import InlineDict
 import regex
 from tbgclient import Session, User, Alert, Message, Topic
@@ -134,6 +136,22 @@ def assemble_userdata(user: User):
     }
 
 
+def assemble_context(tid: int, user: User):
+    return Context(
+        uptime=uptime,
+        tid=tid,
+        uid=user.uid,
+        user_name=user.name,
+        types=topic_info.get(str(tid), {"types": []})["types"],
+        config=config,
+        topic_store=InlineDict(db, f"topic.{tid}"),
+        user_store=InlineDict(db, f"user.{user.uid}"),
+        version=fork_version,
+        bot_id=bot_info["id"],
+        statistics=statistics
+    )
+
+
 def parse_commands(msg: Message):
     my_logger = logger.getChild('parse_commands')
     # Escape the [quote], [spoiler], and [code] tags.
@@ -177,41 +195,60 @@ def parse_commands(msg: Message):
                 # No trespassing.
                 my_logger.debug("[X] No trespassing, aborting")
                 continue
-            if (
-                "exclusive_commands" in topic_info.get(str(msg.tid), {})
-                and command_name in topic_info[str(msg.tid)]["exclusive_commands"]
-            ):
-                # This condition overrides the bottom one.
-                my_logger.debug("[!] Exclusive command, continuing")
-                pass
-            elif command_name in incompatible_commands:
-                # Not supposed to use this command.
-                my_logger.debug("[X] Incompatible command, aborting")
-                continue
             if msg.user.name in bot_info["ignore_list"]:
                 # I don't like this user.
                 my_logger.debug("[X] User in ignore list, aborting")
                 continue
 
-            # Does this command even exist?
-            if command_name in old_commands.commands:
-                my_logger.debug("[!] Identified command as a standard command.")
-                command = old_commands.commands[command_name]
-            elif bot_info["id"] in old_commands.ex_commands:
-                my_logger.debug("[!] Identified command as an extra command.")
-                command = old_commands.ex_commands[bot_info["id"]]
-            else:
-                my_logger.debug("[X] Unknown command, aborting.")
-                continue
+            if command_name in commands.commands:
+                # Gluon commands are given priority.
+                command = commands.commands[command_name]
 
-            # If so, then do it!
-            statistics["valid_commands"] += 1
-            output = command.run(
-                assemble_botdata(),
-                assemble_threaddata(msg.tid),
-                assemble_userdata(msg.user),
-                *arguments
-            )
+                # Is this command compatible?
+                context = assemble_context(msg.tid, msg.user)
+                if not command.expect(context):
+                    my_logger.debug("[X] Incompatible Gluon command, aborting")
+                    continue
+                else:
+                    my_logger.debug("[!] Identified command as a Gluon command.")
+
+                # If so, then do it!
+                statistics["valid_commands"] += 1
+                output = command.run(context, *arguments)
+            else:
+                # Is this command compatible?
+                if (
+                    "exclusive_commands" in topic_info.get(str(msg.tid), {})
+                    and command_name in topic_info[str(msg.tid)]["exclusive_commands"]
+                ):
+                    # This condition overrides the bottom one.
+                    my_logger.debug("[!] Exclusive command, continuing")
+                    pass
+                elif command_name in incompatible_commands:
+                    # Not supposed to use this command.
+                    my_logger.debug("[X] Incompatible command, aborting")
+                    continue
+
+                # Does this command even exist?
+                if command_name in old_commands.commands:
+                    my_logger.debug("[!] Identified command as a standard command.")
+                    command = old_commands.commands[command_name]
+                elif bot_info["id"] in old_commands.ex_commands:
+                    my_logger.debug("[!] Identified command as an extra command.")
+                    command = old_commands.ex_commands[bot_info["id"]]
+                else:
+                    my_logger.debug("[X] Unknown command, aborting.")
+                    continue
+
+                # If so, then do it!
+                statistics["valid_commands"] += 1
+                output = command.run(
+                    assemble_botdata(),
+                    assemble_threaddata(msg.tid),
+                    assemble_userdata(msg.user),
+                    *arguments
+                )
+
             my_logger.debug(f"[!] Command outputted {output!r}")
             if output == "":
                 # No idea why this is distinguished with output being None
